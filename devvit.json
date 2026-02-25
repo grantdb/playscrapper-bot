@@ -3,14 +3,16 @@
     "blocks": {
         "entry": "src/main.ts",
         "triggers": [
-            "onPostSubmit"
+            "onPostSubmit",
+            "onModAction"
         ]
     },
     "permissions": {
         "http": {
             "enable": true,
             "domains": [
-                "generativelanguage.googleapis.com"
+                "generativelanguage.googleapis.com",
+                "play.google.com"
             ]
         }
     }
