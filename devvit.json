@@ -1,0 +1,17 @@
+{
+    "name": "playscrapper-bot",
+    "blocks": {
+        "entry": "src/main.ts",
+        "triggers": [
+            "onPostSubmit"
+        ]
+    },
+    "permissions": {
+        "http": {
+            "enable": true,
+            "domains": [
+                "generativelanguage.googleapis.com"
+            ]
+        }
+    }
+}
