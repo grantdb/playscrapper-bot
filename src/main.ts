@@ -104,10 +104,40 @@ If you cannot find the app via search or your memory, simply return {"found": fa
       appData.title = $('h1').first().text().trim() || appId;
       appData.developer = $('div:contains("Offered By"), a[href*="/store/apps/dev"]').first().text().trim() || $('a.VtfRFb').first().text().trim() || "Unknown Developer";
       appData.description = $('div[data-g-id="description"]').first().text().trim().substring(0, 250) + '...' || "No description available.";
-      appData.rating = "Unrated";
-      appData.downloads = "Unknown";
-      appData.updated = "Unknown";
-      appData.ageRating = "Unknown";
+
+      let rating = "Unrated";
+      let downloads = "Unknown";
+      let ageRating = "Unknown";
+
+      const wVqUob: string[] = [];
+      $('div.wVqUob').each((i, el) => { wVqUob.push($(el).text().trim()); });
+
+      for (const text of wVqUob) {
+        if (text.includes('star')) {
+          const match = text.match(/([\d.]+)star/);
+          if (match) rating = match[1];
+        } else if (text.includes('Downloads')) {
+          downloads = text.replace('Downloads', '').trim();
+        } else if (text.includes('info')) {
+          ageRating = text.replace('info', '').trim();
+        }
+      }
+
+      if (rating === "Unrated") {
+        const altRating = $('div[itemprop="starRating"] > div.TT9eO').text() || $('div:contains("star")').first().text().match(/([\d.]+)star/)?.[1];
+        if (altRating) rating = altRating;
+      }
+
+      const updatedDateText = $('div:contains("Updated on")').last().next().text() || $('div.xg1aie').text();
+      let updatedDate = "Unknown";
+      if (updatedDateText && updatedDateText.length > 5 && updatedDateText.length < 25) {
+        updatedDate = updatedDateText;
+      }
+
+      appData.rating = rating;
+      appData.downloads = downloads;
+      appData.updated = updatedDate;
+      appData.ageRating = ageRating;
 
       console.log(`Fallback successful! Extracted basic details for ${appData.title}.`);
     }
