@@ -18,12 +18,30 @@ Devvit.addSettings([
 
 async function processAppUrl(context: any, postId: string) {
   const post = await context.reddit.getPostById(postId);
-  const contentToSearch = `${post.url ?? ''} ${post.body ?? ''}`;
-  // Matches both ?id=com.example.app and /testing/com.example.app
-  const playStoreRegex = /(?:id=|testing\/)([a-zA-Z0-9._]+)/;
-  const match = contentToSearch.match(playStoreRegex);
+  let contentToSearch = `${post.url ?? ''} ${post.body ?? ''}`;
 
-  if (!match) return;
+  const playStoreRegex = /(?:id=|testing\/)([a-zA-Z0-9._]+)/;
+  let match = contentToSearch.match(playStoreRegex);
+
+  // Fallback: If no link found in body/url (common with Image/Gallery posts), scan the author's comments
+  if (!match) {
+    try {
+      const comments = await post.comments.all();
+      for (const comment of comments) {
+        if (comment.authorId === post.authorId) {
+          contentToSearch += ` ${comment.body}`;
+        }
+      }
+      match = contentToSearch.match(playStoreRegex);
+    } catch (e) {
+      console.log(`Failed to fetch comments for fallback scan: ${e}`);
+    }
+  }
+
+  if (!match) {
+    console.log(`No Play Store ID found for post ${postId} after scanning body and OP comments.`);
+    return;
+  }
 
   const appId = match[1];
 
@@ -231,6 +249,21 @@ Devvit.addTrigger({
       await processAppUrl(context, event.targetPost.id);
     }
   },
+});
+
+Devvit.addMenuItem({
+  location: 'post',
+  label: 'Trigger App Scraper',
+  description: 'Manually run the scraper bot on this post',
+  onPress: async (event, context) => {
+    if (event.targetId) {
+      console.log(`Manual trigger initiated for ${event.targetId}`);
+      await processAppUrl(context, event.targetId);
+      context.ui.showToast('App details scraper task has been triggered!');
+    } else {
+      context.ui.showToast('No post ID found.');
+    }
+  }
 });
 
 export default Devvit;

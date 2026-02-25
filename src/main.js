@@ -1,67 +1,163 @@
-import { Devvit } from '@devvit/public-api';
+import { Devvit, SettingScope } from '@devvit/public-api';
+import * as cheerio from 'cheerio';
 Devvit.configure({
     redditAPI: true,
     http: true,
 });
+Devvit.addSettings([
+    {
+        name: 'gemini_api_key',
+        label: 'Google Gemini API Key',
+        type: 'string',
+        scope: SettingScope.Installation,
+        helpText: 'Get a free API key from Google AI Studio (aistudio.google.com).',
+    }
+]);
+async function processAppUrl(context, postId) {
+    const post = await context.reddit.getPostById(postId);
+    const contentToSearch = `${post.url ?? ''} ${post.body ?? ''}`;
+    // Matches both ?id=com.example.app and /testing/com.example.app
+    const playStoreRegex = /(?:id=|testing\/)([a-zA-Z0-9._]+)/;
+    const match = contentToSearch.match(playStoreRegex);
+    if (!match)
+        return;
+    const appId = match[1];
+    try {
+        console.log(`NEW PROJECT: Fetching details for ${appId} using Gemini...`);
+        const apiKey = await context.settings.get('gemini_api_key');
+        if (!apiKey || typeof apiKey !== 'string') {
+            throw new Error('Gemini API key is not configured in App Settings.');
+        }
+        const prompt = `You are a helpful assistant that retrieves details about Android apps from the Google Play Store.
+I need the details for the app with the package ID: ${appId}
+
+Please return ONLY a raw JSON object with no markdown formatting or backticks. The JSON object must have exactly these keys:
+- "found": A boolean true or false indicating if you could find information about this app.
+- "title": The name of the app (if found)
+- "developer": The developer of the app (if found)
+- "rating": The star rating out of 5 (e.g., "4.5", or "Unrated")
+- "downloads": The approximate number of downloads (e.g., "50M+", or "Unknown")
+- "updated": The date it was last updated (e.g., "Oct 12, 2023", or "Unknown")
+- "ageRating": The content rating (e.g., "Everyone", "Teen")
+- "description": A very brief, 1-2 sentence description of what the app does. Do not exceed 250 characters.
+
+If you cannot find the app via search or your memory, simply return {"found": false}.`;
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }],
+                tools: [
+                    {
+                        googleSearch: {}
+                    }
+                ],
+                generationConfig: {
+                    temperature: 0.1,
+                }
+            })
+        });
+        if (!response.ok) {
+            throw new Error(`Gemini API Error: Status ${response.status}`);
+        }
+        const data = await response.json();
+        // Parse the AI's response text (which should be just JSON)
+        const aiResponseText = data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+        let appData;
+        try {
+            // Strip any residual markdown formatting the AI might have accidentally added
+            const clenedText = aiResponseText.replace(/```json/g, '').replace(/```/g, '').trim();
+            appData = JSON.parse(clenedText);
+        }
+        catch (parseError) {
+            throw new Error(`Failed to parse Gemini response as JSON: ${aiResponseText}`);
+        }
+        // Check if the app was actually found
+        if (appData.found === false) {
+            console.log(`App ID ${appId} could not be found by Gemini. Attempting direct HTML scrape fallback...`);
+            const playStoreURL = `https://play.google.com/store/apps/details?id=${appId}&hl=en_US&gl=US`;
+            const htmlResponse = await fetch(playStoreURL);
+            if (!htmlResponse.ok) {
+                console.log(`Fallback failed. App ${appId} does not exist on Play Store (HTTP ${htmlResponse.status}). Skipping comment.`);
+                return;
+            }
+            const htmlText = await htmlResponse.text();
+            const $ = cheerio.load(htmlText);
+            appData.title = $('h1').first().text().trim() || appId;
+            appData.developer = $('div:contains("Offered By"), a[href*="/store/apps/dev"]').first().text().trim() || $('a.VtfRFb').first().text().trim() || "Unknown Developer";
+            appData.description = $('div[data-g-id="description"]').first().text().trim().substring(0, 250) + '...' || "No description available.";
+            appData.rating = "Unrated";
+            appData.downloads = "Unknown";
+            appData.updated = "Unknown";
+            appData.ageRating = "Unknown";
+            console.log(`Fallback successful! Extracted basic details for ${appData.title}.`);
+        }
+        const title = appData.title || appId;
+        const developer = appData.developer || "Unknown Developer";
+        const rating = appData.rating || "Unrated";
+        const downloads = appData.downloads || "Unknown";
+        const updatedOn = appData.updated || "Unknown";
+        const ageRating = appData.ageRating || "Unknown";
+        const description = appData.description || "No description available.";
+        const commentBody = `### **${title}**\n\n` +
+            `* **Developer:** ${developer}\n` +
+            `* **Rating:** ${rating}\n` +
+            `* **Downloads:** ${downloads}\n` +
+            `* **Updated:** ${updatedOn}\n` +
+            `* **Content Rating:** ${ageRating}\n\n` +
+            `**Description:**\n> ${description}`;
+        const comment = await context.reddit.submitComment({
+            id: post.id,
+            text: commentBody,
+        });
+        await comment.distinguish(true);
+        console.log(`SUCCESS: Comment posted and stickied for ${title}.`);
+    }
+    catch (e) {
+        console.error("CONNECTION/PROCESSING FAILED:", e);
+    }
+}
+Devvit.addSchedulerJob({
+    name: 'process_post_delayed',
+    onRun: async (event, context) => {
+        if (event.data && typeof event.data.postId === 'string') {
+            const postId = event.data.postId;
+            const post = await context.reddit.getPostById(postId);
+            // Check if the post was removed by Reddit's filters or AutoModerator
+            // during the delay window before we attempt to process it.
+            if (post.isRemoved() || post.isSpam()) {
+                console.log(`Post ${postId} was removed or marked as spam. Skipping Gemini processing.`);
+                return;
+            }
+            console.log(`Delay finished for post ${postId}. Ready to process...`);
+            await processAppUrl(context, postId);
+        }
+    },
+});
 Devvit.addTrigger({
     event: 'PostSubmit',
     onEvent: async (event, context) => {
-        const post = await context.reddit.getPostById(event.post?.id);
-        const contentToSearch = `${post.url ?? ''} ${post.body ?? ''}`;
-        const playStoreRegex = /id=([a-zA-Z0-9._]+)/;
-        const match = contentToSearch.match(playStoreRegex);
-        if (!match)
-            return;
-        const appId = match[1];
-        const token = 'a9fa089cd5904586b66db6fbf2341595cb5326d9bf7';
-        const targetUrl = encodeURIComponent(`https://play.google.com/store/apps/details?id=${appId}`);
-        const apiUrl = `https://api.scrape.do/?token=${token}&url=${targetUrl}`;
-        try {
-            console.log(`NEW PROJECT: Fetching ${appId}...`);
-            const response = await fetch(apiUrl);
-            if (!response.ok)
-                throw new Error(`Status: ${response.status}`);
-            const html = await response.text();
-            // Extract data using regex
-            const titleMatch = html.match(/<title>(.*?) - Apps on Google Play<\/title>/);
-            let title = titleMatch ? titleMatch[1] : appId;
-            // Decode entities minimally if needed, though most titles might be okay.
-            const devMatch = html.match(/href="\/store\/apps\/dev\?id=[^"]+"><span>([^<]+)<\/span>/);
-            const developer = devMatch ? devMatch[1] : "Unknown Developer";
-            const ratingMatch = html.match(/aria-label="Rated ([0-9.]+) stars out of five/);
-            const rating = ratingMatch ? ratingMatch[1] : "Unrated";
-            const downloadsMatch = html.match(/<div class="[^"]+">([^<]+)<\/div><div class="[^"]+">Downloads<\/div>/) ||
-                html.match(/<div>([^<]+)\+<\/div><div>Downloads<\/div>/) ||
-                html.match(/>([^<]+)\+?<\/div>[^<]*<div[^>]*>Downloads<\/div>/);
-            const downloads = downloadsMatch ? downloadsMatch[1] : "Unknown";
-            const updatedMatch = html.match(/<div class="[^"]+">Updated on<\/div><div class="[^"]+">([^<]+)<\/div>/) ||
-                html.match(/>Updated on<\/div>[^<]*<div[^>]*>([^<]+)<\/div>/);
-            const updatedOn = updatedMatch ? updatedMatch[1] : "Unknown";
-            const ageMatch = html.match(/itemprop="contentRating"><span>([^<]+)<\/span>/) ||
-                html.match(/"contentRating"><span>([^<]+)<\/span>/);
-            const ageRating = ageMatch ? ageMatch[1] : "Everyone";
-            const descMatch = html.match(/<meta name="description" content="(.*?)"/);
-            let description = descMatch ? descMatch[1] : "No description available.";
-            // Clean up description (decode some basic HTML entities and truncate)
-            description = description.replace(/&quot;/g, '"')
-                .replace(/&#39;/g, "'")
-                .replace(/&amp;/g, "&");
-            if (description.length > 250) {
-                description = description.substring(0, 247) + "...";
-            }
-            // Build the nicely formatted Markdown summary
-            const commentBody = `### 📱 **${title}** by ${developer}\n\n` +
-                `⭐ **Rating:** ${rating} | 📈 **Downloads:** ${downloads} | 📅 **Updated:** ${updatedOn} | 🔞 **Age Rating:** ${ageRating}\n\n` +
-                `📝 **Summary:**\n> ${description}`;
-            const comment = await context.reddit.submitComment({
-                id: post.id,
-                text: commentBody,
+        if (event.post?.id) {
+            console.log(`New post ${event.post.id} detected. Scheduling delayed check in 1 minute...`);
+            // Schedule the job to run 1 minute from now
+            await context.scheduler.runJob({
+                name: 'process_post_delayed',
+                data: { postId: event.post.id },
+                runAt: new Date(Date.now() + 60 * 1000), // + 1 minute
             });
-            await comment.distinguish(true);
-            console.log(`SUCCESS: Comment posted and stickied for ${title}.`);
         }
-        catch (e) {
-            console.error("CONNECTION FAILED:", e);
+    },
+});
+Devvit.addTrigger({
+    event: 'ModAction',
+    onEvent: async (event, context) => {
+        // Only process if the mod action is approving a post
+        if (event.action === 'approvelink' && event.targetPost?.id) {
+            console.log(`Post ${event.targetPost.id} was approved. Processing immediately...`);
+            // Run immediately because a human moderator intentionally approved it
+            await processAppUrl(context, event.targetPost.id);
         }
     },
 });
