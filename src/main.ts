@@ -90,9 +90,13 @@ If you literally cannot find the app, return a JSON object with those keys popul
       const description = appData.description || "No description available.";
 
       // Build the nicely formatted Markdown summary
-      const commentBody = `### 📱 **${title}** by ${developer}\n\n` +
-        `⭐ **Rating:** ${rating} | 📈 **Downloads:** ${downloads} | 📅 **Updated:** ${updatedOn} | 🔞 **Age Rating:** ${ageRating}\n\n` +
-        `📝 **Summary:**\n> ${description}`;
+      const commentBody = `### **${title}**\n\n` +
+        `* **Developer:** ${developer}\n` +
+        `* **Rating:** ${rating}\n` +
+        `* **Downloads:** ${downloads}\n` +
+        `* **Updated:** ${updatedOn}\n` +
+        `* **Content Rating:** ${ageRating}\n\n` +
+        `**Description:**\n> ${description}`;
 
       const comment = await context.reddit.submitComment({
         id: post.id,
