@@ -93,7 +93,8 @@ If you literally cannot find the app, return a JSON object with those keys popul
       `* **Downloads:** ${downloads}\n` +
       `* **Updated:** ${updatedOn}\n` +
       `* **Content Rating:** ${ageRating}\n\n` +
-      `**Description:**\n> ${description}`;
+      `**Description:**\n> ${description}\n\n` +
+      `---\n*^(Bot built by u/grantdb)*`;
 
     const comment = await context.reddit.submitComment({
       id: post.id,
