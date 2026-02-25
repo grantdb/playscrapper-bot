@@ -14,6 +14,12 @@ This bot uses the [Google Gemini API](https://aistudio.google.com/) to process P
 
 ---
 
+## Authors & Credit
+
+Created by **grantdb**. If you use this code as a baseline for your own projects, a quick shout-out is always appreciated!
+
+---
+
 ## Prerequisites
 
 1.  **Node.js & npm:** Make sure you have Node.js installed on your machine.
