@@ -189,16 +189,26 @@ If you absolutely cannot find any information about this app, return {"found": f
 
         // Regex-based extraction works on raw HTML without JS rendering
         const titleRegex = htmlText.match(/<title[^>]*>(.*?)<\/title>/i);
-        const rawTitle = (titleRegex?.[1] ?? appId).replace(' - Apps on Google Play', '').trim();
+        const rawTitleFromTag = (titleRegex?.[1] ?? '').replace(' - Apps on Google Play', '').trim();
 
-        // Play Store uses /store/apps/developer?id= with developer name in a nested <span>
-        // Also try schema.org JSON-LD author field as fallback
-        const devLinkMatch = htmlText.match(/href="\/store\/apps\/developer\?id=[^"]+"><span>([^<]+)<\/span><\/a>/) ||
-          htmlText.match(/href="\/store\/apps\/developer\?id=[^"]+">([^<]+)<\/a>/);
-        const devSchemaMatch = htmlText.match(/"author":\{"@type"[^}]+"name":"([^"]+)"/);
-        const rawDev = devLinkMatch?.[1]?.trim() || devSchemaMatch?.[1]?.trim() || '';
+        // Also try SoftwareApplication schema.org name which is more reliable
+        const titleSchemaMatch = htmlText.match(/"name":"([^"]+)","description"/) ||
+          htmlText.match(/"@type":"SoftwareApplication"[^}]{0,200}"name":"([^"]+)"/);
+        const rawTitle = (rawTitleFromTag && rawTitleFromTag !== appId) ? rawTitleFromTag
+          : (titleSchemaMatch?.[1] || '');
 
-        console.log(`HTML extracted - title: ${rawTitle}, devLink: ${devLinkMatch?.[1]}, devSchema: ${devSchemaMatch?.[1]}`);
+        // Extract developer from the URL parameter — most reliable, appears in all page variants
+        // Handles both ?id=Name and \u003fid\u003dName (URL-encoded) and \u003d (encoded =)
+        const devIdMatch = htmlText.match(/"\/store\/apps\/developer\?id=([^"&\\]+)/) ||
+          htmlText.match(/\/store\/apps\/developer\?id=([^"&<>\s\\]+)/);
+        const rawDevFromUrl = devIdMatch?.[1] ? decodeURIComponent(devIdMatch[1].replace(/\+/g, ' ')) : '';
+
+        // Anchor text fallback (less reliable, may show personal account name)
+        const devLinkMatch = htmlText.match(/href="\/store\/apps\/developer\?id=[^"]+"><span>([^<]+)<\/span><\/a>/);
+        const rawDev = rawDevFromUrl || devLinkMatch?.[1]?.trim() || '';
+
+
+        console.log(`HTML extracted - title: ${rawTitle}, devFromUrl: ${rawDevFromUrl}, devLinkText: ${devLinkMatch?.[1]}`);
         // HTML from the Play Store URL is the source of truth — always prefer over Gemini's guess
         if (rawTitle && rawTitle !== appId) {
           appData.title = rawTitle;  // e.g. "PromptVault AI Prompt Manager" beats Gemini's "PromptPad"
