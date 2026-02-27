@@ -66,16 +66,16 @@ async function processAppUrl(context: any, postId: string): Promise<{ success: b
     const playStoreLink = `https://play.google.com/store/apps/details?id=${appId}`;
     const prompt = `You are a helpful assistant that retrieves details about Android apps from the Google Play Store.
 
-Please visit this exact URL and read the page to get the app details:
-${playStoreLink}
+Please search the web for the Android app exactly matching this package ID: "${appId}"
 
-Use your Google Search tool to search for EXACTLY this query to ensure you only read the official store page: "site:play.google.com ${appId}"
+IMPORTANT: Try to find the official Google Play Store page first. 
+If the official Play Store page is not found (often due to geo-restrictions or region locking), you MUST look for the app's metadata on trustworthy alternative databases like AppBrain or APKPure.
 
-From the search results, you MUST extract:
+From your search results, you MUST extract:
 - The EXACT app title as it appears on the Play Store page.
 - The EXACT developer or publisher name. (Do not return "Unknown". Look hard in the search snippets for the creator's name).
 - The star rating.
-- The download count (e.g., 50M+, 1K+, or "New Release").
+- The download count (e.g., 50M+, 1K+, or "New Release"). Look for terms like "Installs", "Install Count", or "Total Installs". If not found in the primary snippet, search specifically for "[App Name] play store downloads".
 - The last updated date.
 - The content rating (e.g., Everyone, Teen, PEGI 3).
 - A brief 1-2 sentence description of what the app does.
