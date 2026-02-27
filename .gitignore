@@ -1,2 +1,8 @@
 node_modules
 .env
+*.txt
+*.json
+!devvit.json
+!package.json
+!test-post.json
+!friendwatch.json
