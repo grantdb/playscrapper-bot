@@ -94,11 +94,26 @@ If you cannot find the app via search or your memory, simply return {"found": fa
 
     const data = await response.json();
 
-    // When googleSearch tool is active, Gemini returns multiple parts —
-    // the first part is the search tool call (no .text), the actual JSON is in a later part.
-    // So we must scan all parts to find the one with text content.
+    // When googleSearch tool is active, Gemini returns multiple parts.
+    // Some parts are prose text, and the actual JSON may be in any part.
+    // We try to parse each part as JSON and use the first one that succeeds.
     const parts: any[] = data.candidates?.[0]?.content?.parts ?? [];
-    const aiResponseText = parts.map((p: any) => p.text ?? '').find((t: string) => t.trim().length > 0) || '{}';
+    let aiResponseText = '{}';
+    for (const part of parts) {
+      const text = (part.text ?? '').replace(/```json/g, '').replace(/```/g, '').trim();
+      if (text.startsWith('{') || text.startsWith('[')) {
+        aiResponseText = text;
+        break;
+      }
+    }
+    // If no part starts with { or [, fall back to last non-empty text part
+    if (aiResponseText === '{}') {
+      for (let i = parts.length - 1; i >= 0; i--) {
+        const text = (parts[i].text ?? '').replace(/```json/g, '').replace(/```/g, '').trim();
+        if (text.length > 0) { aiResponseText = text; break; }
+      }
+    }
+    console.log(`Gemini raw response text (first 200 chars): ${aiResponseText.substring(0, 200)}`);
     let appData;
 
     try {
