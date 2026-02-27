@@ -53,22 +53,28 @@ async function processAppUrl(context: any, postId: string): Promise<boolean> {
       throw new Error('Gemini API key is not configured in App Settings.');
     }
 
+    const playStoreLink = `https://play.google.com/store/apps/details?id=${appId}`;
     const prompt = `You are a helpful assistant that retrieves details about Android apps from the Google Play Store.
-I need the details for the app with the package ID: ${appId}
 
-IMPORTANT CAUTION: This app might be very new! Please use your Google Search tool to search for "play store ${appId}" or the app's name to find its current details dynamically. Even if you don't recognize the app, search the web to find its title, developer, rating, downloads, etc.
+I need the details for this app:
+- Package ID: ${appId}
+- Play Store URL: ${playStoreLink}
+
+IMPORTANT: This may be a brand-new or recently released app. Please use your Google Search tool to:
+1. Search for the exact Play Store URL: ${playStoreLink}
+2. Also try searching for the package ID: "${appId}"
 
 Please return ONLY a raw JSON object with no markdown formatting or backticks. The JSON object must have exactly these keys:
 - "found": A boolean true or false indicating if you could find information about this app.
 - "title": The name of the app (if found)
-- "developer": The developer of the app (if found)
+- "developer": The developer or company name (if found)
 - "rating": The star rating out of 5 (e.g., "4.5", or "Unrated")
 - "downloads": The approximate number of downloads (e.g., "50M+", or "Unknown")
 - "updated": The date it was last updated (e.g., "Oct 12, 2023", or "Unknown")
 - "ageRating": The content rating (e.g., "Everyone", "Teen")
 - "description": A very brief, 1-2 sentence description of what the app does. Do not exceed 250 characters.
 
-If you cannot find the app via search or your memory, simply return {"found": false}.`;
+If you absolutely cannot find any information about this app, return {"found": false}.`;
 
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
       method: 'POST',
@@ -269,9 +275,10 @@ If you cannot find the app via search or your memory, simply return {"found": fa
     const ageRating = appData.ageRating || "Unknown";
     const description = appData.description || "No description available.";
 
-    // Only abort if Gemini explicitly said it couldn't find the app AND we have no useful data at all
-    if (appData.found === false && !appData.title && (developer === "Unknown Developer" || developer === "Unknown")) {
-      console.log(`Aborting post for ${appId}: Gemini found nothing and fallback also yielded no data.`);
+    // Abort if we have no real title (title is still the raw package ID) AND no developer
+    // This means both Gemini and HTML scraping completely failed — don't post garbage
+    if ((title === appId || !appData.title) && (developer === "Unknown Developer" || !appData.developer)) {
+      console.log(`Aborting post for ${appId}: Could not extract any real app data. Title=${title}, Dev=${developer}`);
       return false;
     }
 
