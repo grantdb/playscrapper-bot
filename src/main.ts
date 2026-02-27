@@ -16,11 +16,11 @@ Devvit.addSettings([
   }
 ]);
 
-async function processAppUrl(context: any, postId: string): Promise<boolean> {
+async function processAppUrl(context: any, postId: string): Promise<{ success: boolean; message: string }> {
   const post = await context.reddit.getPostById(postId);
   // 1. Strip Markdown backslashes (Reddit escapes underscores as \_ which breaks regex)
   // 2. Decode content to handle encoded underscores (%5F) and other entities
-  let contentToSearch = `${post.url ?? ''} ${post.body ?? ''}`.replace(/\\/g, '');
+  let contentToSearch = (post.body ?? '').replace(/\\/g, '');
   try {
     contentToSearch = decodeURIComponent(contentToSearch);
   } catch (e) {
@@ -49,8 +49,8 @@ async function processAppUrl(context: any, postId: string): Promise<boolean> {
   }
 
   if (!match) {
-    console.log(`No Play Store ID found for post ${postId} after scanning body and OP comments.`);
-    return false;
+    console.log(`No Play Store ID found for post ${postId} after scanning title, body and OP comments.`);
+    return { success: false, message: 'No Play Store link or package ID found in the post content.' };
   }
 
   const appId = match[1];
@@ -176,7 +176,7 @@ If you cannot visit or find the page at all, return {"found": false}.`;
         console.log(`Fetch to play.google.com blocked by Devvit: ${fetchErr}`);
         if (geminiFoundNothing) {
           console.log("Both Gemini and HTML fallback failed. Aborting silently.");
-          return false;
+          return { success: false, message: 'Both Gemini and HTML fallback failed (Network/Access error).' };
         }
         // Gemini had partial data — continue and post what we have
         console.log("HTML blocked but Gemini has partial data — will post with that.");
@@ -196,7 +196,7 @@ If you cannot visit or find the page at all, return {"found": false}.`;
           const betaComment = await context.reddit.submitComment({ id: post.id, text: betaCommentBody });
           await betaComment.distinguish(true);
           console.log(`SUCCESS: Posted beta/testing fallback comment for ${appId}.`);
-          return true;
+          return { success: true, message: 'App identified as Early Access/Beta. Testing link posted.' };
         }
         // Gemini had partial info — fall through and post with that
       }
@@ -218,6 +218,7 @@ If you cannot visit or find the page at all, return {"found": false}.`;
         // Extract developer from the URL parameter — most reliable, appears in all page variants
         // Handles both ?id=Name and \u003fid\u003dName (URL-encoded) and \u003d (encoded =)
         const devIdMatch = htmlText.match(/"\/store\/apps\/developer\?id=([^"&\\]+)/) ||
+          htmlText.match(/\\\/store\\\/apps\\\/developer\?id(?:=|\\u003d)([^"&\\]+)/) ||
           htmlText.match(/\/store\/apps\/developer\?id=([^"&<>\s\\]+)/);
         const rawDevFromUrl = devIdMatch?.[1] ? decodeURIComponent(devIdMatch[1].replace(/\+/g, ' ')) : '';
 
@@ -319,7 +320,7 @@ If you cannot visit or find the page at all, return {"found": false}.`;
     // This means both Gemini and HTML scraping completely failed — don't post garbage
     if ((title === appId || !appData.title) && (developer === "Unknown Developer" || !appData.developer)) {
       console.log(`Aborting post for ${appId}: Could not extract any real app data. Title=${title}, Dev=${developer}`);
-      return false;
+      return { success: false, message: 'Could not extract valid app details from the Play Store page.' };
     }
 
     // Build the comment body dynamically, omitting "Unknown" or "Unrated" fields
@@ -352,10 +353,10 @@ If you cannot visit or find the page at all, return {"found": false}.`;
     await comment.distinguish(true);
 
     console.log(`SUCCESS: Comment posted and stickied for ${title}.`);
-    return true;
+    return { success: true, message: `Successfully scraped and posted details for ${title}!` };
   } catch (e) {
     console.error("CONNECTION/PROCESSING FAILED:", e);
-    return false;
+    return { success: false, message: `An unexpected error occurred: ${e}` };
   }
 }
 
@@ -390,11 +391,11 @@ Devvit.addMenuItem({
   onPress: async (event, context) => {
     if (event.targetId) {
       console.log(`Manual trigger initiated for ${event.targetId}`);
-      const success = await processAppUrl(context, event.targetId);
-      if (success) {
-        context.ui.showToast('App details scraper task has been triggered and posted!');
+      const result = await processAppUrl(context, event.targetId);
+      if (result.success) {
+        context.ui.showToast(result.message);
       } else {
-        context.ui.showToast('Could not find app details or scraping was blocked by restrictions.');
+        context.ui.showToast(`Scraper failed: ${result.message}`);
       }
     } else {
       context.ui.showToast('No post ID found.');
