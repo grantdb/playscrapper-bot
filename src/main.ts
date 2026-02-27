@@ -100,48 +100,52 @@ If you cannot find the app via search or your memory, simply return {"found": fa
 
     try {
       // Strip any residual markdown formatting the AI might have accidentally added
-      const clenedText = aiResponseText.replace(/```json/g, '').replace(/```/g, '').trim();
-      appData = JSON.parse(clenedText);
+      const cleanedText = aiResponseText.replace(/```json/g, '').replace(/```/g, '').trim();
+      appData = JSON.parse(cleanedText);
     } catch (parseError) {
       throw new Error(`Failed to parse Gemini response as JSON: ${aiResponseText}`);
     }
 
-    // Check if the app was actually found, OR if essential data is missing ("Unknown")
-    if (appData.found === false || appData.developer === "Unknown" || appData.downloads === "Unknown") {
-      console.log(`App ID ${appId} could not be found by Gemini (or returned Unknown data). Attempting direct HTML scrape fallback...`);
+    console.log(`Gemini result - found: ${appData.found}, developer: ${appData.developer ?? 'none'}, downloads: ${appData.downloads ?? 'none'}`);
+
+    // Trigger HTML fallback only if Gemini found nothing at all OR is missing the developer name
+    const geminiFoundNothing = appData.found === false;
+    const geminiMissingDeveloper = !appData.developer || appData.developer === "Unknown";
+
+    if (geminiFoundNothing || geminiMissingDeveloper) {
+      console.log(`Attempting HTML fallback for ${appId} (geminiFoundNothing=${geminiFoundNothing}, missingDev=${geminiMissingDeveloper})...`);
 
       const playStoreURL = `https://play.google.com/store/apps/details?id=${appId}&hl=en_US&gl=US`;
       let htmlResponse;
       try {
         htmlResponse = await fetch(playStoreURL);
       } catch (fetchErr) {
-        console.log(`Fetch to play.google.com failed (likely Devvit Domain exceptions restricted): ${fetchErr}`);
-        // If play.google.com is blocked and Gemini found nothing, we definitely want to skip.
-        if (appData.found === false) {
-          console.log("Both Gemini and Fallback Scrape failed/blocked. Aborting silently.");
+        console.log(`Fetch to play.google.com blocked by Devvit: ${fetchErr}`);
+        if (geminiFoundNothing) {
+          console.log("Both Gemini and HTML fallback failed. Aborting silently.");
           return false;
         }
+        // Gemini had partial data — continue and post what we have
+        console.log("HTML blocked but Gemini has partial data — will post with that.");
       }
 
       if (htmlResponse && !htmlResponse.ok) {
-        console.log(`Fallback failed. App ${appId} returned HTTP ${htmlResponse.status}. Treating as Beta/Testing app.`);
-
-        let testingUrl = `https://play.google.com/apps/testing/${appId}`;
-
-        const betaCommentBody = `### **Early Access / Beta Testing App**\n\n` +
-          `It looks like this app is currently in **Early Access**, **Closed Testing**, or isn't publicly indexed on the Play Store yet.\n\n` +
-          `**Want to help test this app?**\n` +
-          `You may need to opt-in as a tester to download it. You can try the standard Play Store testing opt-in link below:\n\n` +
-          `👉 **[Sign up to test this app](${testingUrl})**\n\n` +
-          `*Note: App details such as developer, rating, and downloads cannot be verified for unpublished testing apps.*`;
-
-        const betaComment = await context.reddit.submitComment({
-          id: post.id,
-          text: betaCommentBody,
-        });
-        await betaComment.distinguish(true);
-        console.log(`SUCCESS: Posted beta/testing fallback comment for ${appId}.`);
-        return true;
+        // If still nothing from Gemini, post a beta notice
+        if (geminiFoundNothing) {
+          console.log(`Fallback failed (HTTP ${htmlResponse.status}). Treating as Beta/Testing app.`);
+          const testingUrl = `https://play.google.com/apps/testing/${appId}`;
+          const betaCommentBody = `### **Early Access / Beta Testing App**\n\n` +
+            `It looks like this app is currently in **Early Access**, **Closed Testing**, or isn't publicly indexed on the Play Store yet.\n\n` +
+            `**Want to help test this app?**\n` +
+            `You may need to opt-in as a tester to download it. You can try the standard Play Store testing opt-in link below:\n\n` +
+            `👉 **[Sign up to test this app](${testingUrl})**\n\n` +
+            `*Note: App details such as developer, rating, and downloads cannot be verified for unpublished testing apps.*`;
+          const betaComment = await context.reddit.submitComment({ id: post.id, text: betaCommentBody });
+          await betaComment.distinguish(true);
+          console.log(`SUCCESS: Posted beta/testing fallback comment for ${appId}.`);
+          return true;
+        }
+        // Gemini had partial info — fall through and post with that
       }
 
       if (htmlResponse && htmlResponse.ok) {
@@ -227,14 +231,9 @@ If you cannot find the app via search or your memory, simply return {"found": fa
     const ageRating = appData.ageRating || "Unknown";
     const description = appData.description || "No description available.";
 
-    // If everything is still Unknown/default after both Gemini and Fallback, don't post a useless comment
-    if (
-      (developer === "Unknown Developer" || developer === "Unknown") &&
-      (downloads === "Unknown") &&
-      (rating === "Unrated") &&
-      (ageRating === "Unknown")
-    ) {
-      console.log(`Aborting post for ${appId}. No meaningful data was found by Gemini or Fallback scraper.`);
+    // Only abort if Gemini explicitly said it couldn't find the app AND we have no useful data at all
+    if (appData.found === false && !appData.title && (developer === "Unknown Developer" || developer === "Unknown")) {
+      console.log(`Aborting post for ${appId}: Gemini found nothing and fallback also yielded no data.`);
       return false;
     }
 
