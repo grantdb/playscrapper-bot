@@ -75,7 +75,7 @@ From your search results, you MUST extract:
 - The EXACT app title as it appears on the Play Store page.
 - The EXACT developer or publisher name. (Do not return "Unknown". Look hard in the search snippets for the creator's name).
 - The star rating.
-- The download count (e.g., 50M+, 1K+, or "New Release"). Look for terms like "Installs", "Install Count", or "Total Installs". If not found in the primary snippet, search specifically for "[App Name] play store downloads".
+- The download count (e.g., 50M+, 1K+, or "New Release"). You MUST provide a download count. If the official Play Store search snippet is missing it (often due to geo-restrictions), search specifically for "[App Name] downloads" or "[App ID] installs" and check sites like APKPure, AppBrain, or similar APK databases for the estimate (e.g., 1M+, 5M+).
 - The last updated date.
 - The content rating (e.g., Everyone, Teen, PEGI 3).
 - A brief 1-2 sentence description of what the app does.
