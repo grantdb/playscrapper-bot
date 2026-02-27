@@ -171,13 +171,14 @@ If you cannot find the app via search or your memory, simply return {"found": fa
         const $ = cheerio.load(htmlText);
 
         // Regex-based extraction works on raw HTML without JS rendering
-        const titleMatch = htmlText.match(/href="\/store\/apps\/dev\?id=[^"]+">([^<]+)<\/a>/);
-        const devFromRegex = titleMatch ? null : null; // keep below
         const titleRegex = htmlText.match(/<title[^>]*>(.*?)<\/title>/i);
         const rawTitle = (titleRegex?.[1] ?? appId).replace(' - Apps on Google Play', '').trim();
 
-        const devMatch = htmlText.match(/href="\/store\/apps\/dev\?id=[^"]+">([^<]+)<\/a>/);
-        const rawDev = devMatch?.[1]?.trim() ?? '';
+        // Play Store uses /store/apps/developer?id= (not /store/apps/dev?id=)
+        // Also try schema.org JSON-LD author field as fallback
+        const devLinkMatch = htmlText.match(/href="\/store\/apps\/developer\?id=[^"]+">([^<]+)<\/a>/);
+        const devSchemaMatch = htmlText.match(/"author":\{"@type"[^}]+"name":"([^"]+)"/);
+        const rawDev = devLinkMatch?.[1]?.trim() || devSchemaMatch?.[1]?.trim() || '';
 
         if (!appData.title || appData.title === appId) {
           appData.title = rawTitle || $('h1').first().text().trim() || appId;
