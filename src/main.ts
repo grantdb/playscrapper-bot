@@ -136,7 +136,13 @@ If you cannot find the app via search or your memory, simply return {"found": fa
       const playStoreURL = `https://play.google.com/store/apps/details?id=${appId}&hl=en_US&gl=US`;
       let htmlResponse;
       try {
-        htmlResponse = await fetch(playStoreURL);
+        htmlResponse = await fetch(playStoreURL, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Linux; Android 12; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          }
+        });
       } catch (fetchErr) {
         console.log(`Fetch to play.google.com blocked by Devvit: ${fetchErr}`);
         if (geminiFoundNothing) {
@@ -174,12 +180,14 @@ If you cannot find the app via search or your memory, simply return {"found": fa
         const titleRegex = htmlText.match(/<title[^>]*>(.*?)<\/title>/i);
         const rawTitle = (titleRegex?.[1] ?? appId).replace(' - Apps on Google Play', '').trim();
 
-        // Play Store uses /store/apps/developer?id= (not /store/apps/dev?id=)
+        // Play Store uses /store/apps/developer?id= with developer name in a nested <span>
         // Also try schema.org JSON-LD author field as fallback
-        const devLinkMatch = htmlText.match(/href="\/store\/apps\/developer\?id=[^"]+">([^<]+)<\/a>/);
+        const devLinkMatch = htmlText.match(/href="\/store\/apps\/developer\?id=[^"]+"><span>([^<]+)<\/span><\/a>/) ||
+          htmlText.match(/href="\/store\/apps\/developer\?id=[^"]+">([^<]+)<\/a>/);
         const devSchemaMatch = htmlText.match(/"author":\{"@type"[^}]+"name":"([^"]+)"/);
         const rawDev = devLinkMatch?.[1]?.trim() || devSchemaMatch?.[1]?.trim() || '';
 
+        console.log(`HTML extracted - title: ${rawTitle}, devLink: ${devLinkMatch?.[1]}, devSchema: ${devSchemaMatch?.[1]}`);
         if (!appData.title || appData.title === appId) {
           appData.title = rawTitle || $('h1').first().text().trim() || appId;
         }
