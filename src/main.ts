@@ -101,11 +101,11 @@ If the official Play Store page is not found (often due to geo-restrictions or r
 
 From your search results, you MUST extract:
 - The EXACT app title as it appears on the page.
-- The EXACT developer or publisher name. (Look carefully at the search result's header or the string immediately following the app title. DO NOT return "Not specified" or "Unknown" if ANY name is visible).
+- The EXACT developer name. Look for "Offered by", "Developer:", or the text directly below the app title. (For Matedoro, it is "adrisanchiner", not a Reddit username).
 - The star rating (if available, else "Unrated").
-- The download count (e.g., 50+, 100+, 50M+, or "New Release"). You MUST provide the most specific number found in the snippets.
+- The exact download count if visible (e.g., "50+", "100+", "1K+"). DO NOT return "New Release" if a number is mentioned in any snippet.
 - The last updated date.
-- The content rating.
+- The maturity/content rating (e.g., "Everyone", "Teen", "PEGI 3", "ESRB"). Look for "Content rating" or "Maturity".
 - A brief 1-2 sentence description.
 
 Return ONLY a raw JSON object with no markdown or backticks:
