@@ -199,18 +199,19 @@ If you absolutely cannot find any information about this app, return {"found": f
         const rawDev = devLinkMatch?.[1]?.trim() || devSchemaMatch?.[1]?.trim() || '';
 
         console.log(`HTML extracted - title: ${rawTitle}, devLink: ${devLinkMatch?.[1]}, devSchema: ${devSchemaMatch?.[1]}`);
-        if (!appData.title || appData.title === appId) {
-          appData.title = rawTitle || $('h1').first().text().trim() || appId;
+        // HTML from the Play Store URL is the source of truth — always prefer over Gemini's guess
+        if (rawTitle && rawTitle !== appId) {
+          appData.title = rawTitle;  // e.g. "PromptVault AI Prompt Manager" beats Gemini's "PromptPad"
         }
-        if (!appData.developer || appData.developer === "Unknown" || appData.developer === "Unknown Developer") {
-          appData.developer = rawDev || $('a.VtfRFb').first().text().trim() || "Unknown Developer";
+        if (rawDev) {
+          appData.developer = rawDev; // e.g. "PromptVault" beats Gemini's "Furkan Halici"
         }
         if (!appData.description || appData.description.includes("No description available")) {
           const descEl = $('div[data-g-id="description"]').first().text().trim();
           if (descEl) appData.description = descEl.substring(0, 250) + '...';
         }
 
-        console.log(`HTML regex extracted - title: ${rawTitle}, dev: ${rawDev}`);
+        console.log(`After HTML override - title: ${appData.title}, dev: ${appData.developer}`);
 
         let rating = "Unrated";
         let downloads = "Unknown";
