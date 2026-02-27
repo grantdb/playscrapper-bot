@@ -16,7 +16,7 @@ Devvit.addSettings([
   }
 ]);
 
-async function processAppUrl(context: any, postId: string): Promise<{ success: boolean; message: string }> {
+async function processAppUrl(context: any, postId: string, force: boolean = false): Promise<{ success: boolean; message: string }> {
   // 0. Deduplication & Locking
   const lockKey = `processing:${postId}`;
   const isLocked = await context.redis.get(lockKey);
@@ -32,11 +32,14 @@ async function processAppUrl(context: any, postId: string): Promise<{ success: b
     const post = await context.reddit.getPostById(postId);
 
     // Check if we already commented (safeguard against Job vs Trigger race)
-    const existingComments = await post.comments.all();
-    const botUser = await context.reddit.getAppUser();
-    if (existingComments.find((cmt: any) => cmt.authorId === botUser.id)) {
-      console.log(`Aborting: Bot already commented on ${postId}.`);
-      return { success: true, message: 'Already handled.' };
+    // Only skip if not forced (manual trigger)
+    if (!force) {
+      const existingComments = await post.comments.all();
+      const botUser = await context.reddit.getAppUser();
+      if (existingComments.find((cmt: any) => cmt.authorId === botUser.id)) {
+        console.log(`Aborting: Bot already commented on ${postId}.`);
+        return { success: true, message: 'Already handled.' };
+      }
     }
 
     // 1. Strip Markdown backslashes (Reddit escapes underscores as \_ which breaks regex)
@@ -87,31 +90,37 @@ async function processAppUrl(context: any, postId: string): Promise<{ success: b
 
 Please search the web for the Android app exactly matching this package ID: "${appId}"
 
+CRITICAL: You MUST verify that the search results refer to the EXACT package ID "${appId}". 
+DO NOT provide information for a different app even if the name is similar (e.g., if the user asks for "com.matedoro.app", do NOT return "Matadero Madrid" or "com.matadero.madrid"). 
+If you find multiple similar results, prioritize the one that matches the package ID exactly in the URL or snippet.
+
 IMPORTANT: Try to find the official Google Play Store page first. 
-If the official Play Store page is not found (often due to geo-restrictions or region locking), you MUST look for the app's metadata on trustworthy alternative databases like AppBrain or APKPure.
+Some apps are in "Early Access" or "Beta" but are still publicly visible with download counts (e.g., 100+ downloads). You MUST extract details for these apps if you can find them.
+
+If the official Play Store page is not found (often due to geo-restrictions or region locking), you MUST look for the app's metadata on trustworthy alternative databases like AppBrain, APKPure, or Softpedia.
 
 From your search results, you MUST extract:
-- The EXACT app title as it appears on the Play Store page.
-- The EXACT developer or publisher name. (Do not return "Unknown". Look hard in the search snippets for the creator's name).
-- The star rating.
-- The download count (e.g., 50M+, 1K+, or "New Release"). You MUST provide a download count. If the official Play Store search snippet is missing it (often due to geo-restrictions), search specifically for "[App Name] downloads" or "[App ID] installs" and check sites like APKPure, AppBrain, or similar APK databases for the estimate (e.g., 1M+, 5M+).
+- The EXACT app title as it appears on the page.
+- The EXACT developer or publisher name. (Look carefully at the search results for the creator).
+- The star rating (if available, else "Unrated").
+- The download count (e.g., 100+, 50M+, or "New Release"). You MUST provide an estimate.
 - The last updated date.
 - The content rating (e.g., Everyone, Teen, PEGI 3).
-- A brief 1-2 sentence description of what the app does.
+- A brief 1-2 sentence description including its primary purpose.
 
 Return ONLY a raw JSON object with no markdown or backticks:
 {
   "found": true or false,
-  "title": "exact title from page",
-  "developer": "exact developer name from page",
-  "rating": "e.g. 4.5 or Unrated",
-  "downloads": "e.g. 50M+",
-  "updated": "e.g. Jan 15, 2025",
+  "title": "exact title",
+  "developer": "exact developer",
+  "rating": "4.5 or Unrated",
+  "downloads": "e.g. 100+",
+  "updated": "e.g. Feb 22, 2026",
   "ageRating": "e.g. Everyone",
-  "description": "1-2 sentence description, max 250 chars"
+  "description": "..."
 }
 
-If you cannot visit or find the page at all, return {"found": false}.`;
+If you cannot verify the EXACT package ID "${appId}" exists, return {"found": false}.`;
 
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
         method: 'POST',
@@ -152,6 +161,8 @@ If you cannot visit or find the page at all, return {"found": false}.`;
         }
       }
 
+      console.log(`Gemini raw response text (first 200 chars): ${aiResponseText.substring(0, 200)}`);
+
       try {
         const cleanedText = aiResponseText.replace(/```json/g, '').replace(/```/g, '').trim();
         const parsed = JSON.parse(cleanedText);
@@ -161,6 +172,7 @@ If you cannot visit or find the page at all, return {"found": false}.`;
       } catch (parseError) {
         console.log(`Failed to parse Gemini response as JSON: ${aiResponseText}`);
       }
+      console.log(`Gemini result - found: ${appData.found}, title: ${appData.title}, developer: ${appData.developer}`);
 
       const geminiFoundNothing = appData.found === false;
       const geminiMissingStats = !appData.downloads || appData.downloads === "Unknown";
@@ -177,21 +189,28 @@ If you cannot visit or find the page at all, return {"found": false}.`;
             }
           });
         } catch (fetchErr) {
-          htmlResponse = { ok: false, status: 403 } as any;
+          htmlResponse = { ok: false, status: 403, statusText: "Blocked by Devvit" } as any;
         }
 
-        if (htmlResponse && !htmlResponse.ok && geminiFoundNothing) {
-          console.log(`Fallback failed. Treating as Beta/Testing app.`);
-          const testingUrl = `https://play.google.com/apps/testing/${appId}`;
-          const betaCommentBody = `### **Early Access / Beta Testing App**\n\n` +
-            `It looks like this app is currently in **Early Access**, **Closed Testing**, or isn't publicly indexed on the Play Store yet.\n\n` +
-            `👉 **[Sign up to test this app](${testingUrl})**\n\n` +
-            `*Note: App details such as developer, rating, and downloads cannot be verified for unpublished testing apps.*\n\n` +
-            `---\n\n` +
-            `*I am a bot. If you find an error, please [contact the moderators](https://www.reddit.com/message/compose?to=/r/${post.subredditName}) of this subreddit.*`;
-          const betaComment = await context.reddit.submitComment({ id: post.id, text: betaCommentBody });
-          await betaComment.distinguish(true);
-          return { success: true, message: 'App identified as Early Access/Beta. Testing link posted.' };
+        if (htmlResponse && !htmlResponse.ok) {
+          // If Gemini also failed completely, we fallback to a more generic description if we can find it
+          // In the case of com.aryan.reader, if Gemini said false, we post Beta notice.
+          if (geminiFoundNothing) {
+            console.log(`Fallback failed (HTTP ${htmlResponse.status}). Treating as potential Beta/Testing app.`);
+            const testingUrl = `https://play.google.com/apps/testing/${appId}`;
+            const betaCommentBody = `### **Early Access / Indexed App**\n\n` +
+              `It looks like this app is currently in **Early Access**, a **Closed Beta**, or its details are not yet fully available in our primary data sources.\n\n` +
+              `**Want to try this app?**\n` +
+              `You can find it on the Google Play Store using the link below. For some testing apps, you may need to opt-in as a tester first:\n\n` +
+              `👉 **[View App on Play Store](https://play.google.com/store/apps/details?id=${appId})**\n` +
+              `👉 **[Opt-in to testing](${testingUrl})**\n\n` +
+              `*Note: Detailed ratings and download statistics may be hidden for unpublished or new testing apps.*\n\n` +
+              `---\n\n` +
+              `*I am a bot. If you find an error, please [contact the moderators](https://www.reddit.com/message/compose?to=/r/${post.subredditName}) of this subreddit.*`;
+            const betaComment = await context.reddit.submitComment({ id: post.id, text: betaCommentBody });
+            await betaComment.distinguish(true);
+            return { success: true, message: 'App identified as Early Access/Beta. Meta-link posted.' };
+          }
         }
 
         if (htmlResponse && htmlResponse.ok) {
@@ -314,7 +333,8 @@ Devvit.addMenuItem({
   onPress: async (event, context) => {
     if (event.targetId) {
       console.log(`Manual trigger initiated for ${event.targetId}`);
-      const result = await processAppUrl(context, event.targetId);
+      // Pass force: true to allow re-runs even if bot already commented
+      const result = await processAppUrl(context, event.targetId, true);
       if (result.success) {
         context.ui.showToast(result.message);
       } else {
