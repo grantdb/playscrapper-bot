@@ -275,7 +275,10 @@ If you absolutely cannot find any information about this app, return {"found": f
     const title = appData.title || appId;
     const developer = appData.developer || "Unknown Developer";
     const rating = appData.rating || "Unrated";
-    const downloads = appData.downloads || "Unknown";
+    // For confirmed apps, "Unknown" downloads just means it's too new — show "New Release"
+    const downloads = (appData.downloads && appData.downloads !== "Unknown")
+      ? appData.downloads
+      : (appData.found !== false ? "New Release" : "Unknown");
     const updatedOn = appData.updated || "Unknown";
     const ageRating = appData.ageRating || "Unknown";
     const description = appData.description || "No description available.";
@@ -293,7 +296,8 @@ If you absolutely cannot find any information about this app, return {"found": f
       `* **Downloads:** ${downloads}\n` +
       `* **Updated:** ${updatedOn}\n` +
       `* **Content Rating:** ${ageRating}\n\n` +
-      `**Description:**\n> ${description}`;
+      `**Description:**\n> ${description}\n\n` +
+      `[📲 View on Google Play](${playStoreLink})`;
 
     const comment = await context.reddit.submitComment({
       id: post.id,
