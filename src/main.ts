@@ -92,15 +92,14 @@ Your task is to find the official information for the app with package ID: "${ap
 USE YOUR SEARCH TOOL to find the current metadata for this app.
 Search query suggestions:
 1. 'site:play.google.com "${appId}"'
-2. 'site:play.google.com "${appId}" downloads rating'
+2. 'site:play.google.com "${appId}" downloads content rating'
 
 CRITICAL extracted data:
 - The EXACT app title.
 - Official Developer name (look for "Offered by").
-- The exact download count (e.g., "10+", "50+", "100+"). SEARCH CAREFULLY.
-- The content maturity rating (e.g., "Everyone", "Teen", "Rated for 3+").
-- The last updated date (e.g., "Feb 24, 2026").
-- Brief 1-2 sentence description.
+- The exact download count (e.g., "10+", "50+", "1K+"). If you see "10+ Downloads" in a snippet, return "10+".
+- The content maturity rating (e.g., "Everyone", "Teen", "Rated for 3+"). Look for the word "Everyone" or "Rated for".
+- A brief 1-2 sentence description.
 
 Return ONLY a raw JSON object:
 {
@@ -243,9 +242,16 @@ If you find NO evidence of any app with this package ID, return {"found": false}
     const title = appData.title || appId;
     const developer = (appData.developer && !appData.developer.includes("Not specified") && !appData.developer.includes("Unknown")) ? appData.developer : "Unknown Developer";
     const rating = appData.rating || "Unrated";
-    const downloads = (appData.downloads && !appData.downloads.toLowerCase().includes("not") && !appData.downloads.toLowerCase().includes("unknown") && appData.downloads.trim() !== "") ? appData.downloads : (appData.found !== false ? "New Release" : "Unknown");
+
+    // Use regex to ensure we only get strings containing numbers (e.g., 10+, 1K+, 100M+)
+    const downloadsMatch = appData.downloads?.match(/\d+[KMB\+]*/i);
+    const downloads = downloadsMatch ? downloadsMatch[0] : (appData.found !== false ? "New Release" : "Unknown");
+
     const updatedOn = (appData.updated && !appData.updated.toLowerCase().includes("not") && !appData.updated.toLowerCase().includes("unknown") && appData.updated.trim() !== "") ? appData.updated : "Unknown";
-    const ageRating = (appData.ageRating && !appData.ageRating.toLowerCase().includes("not") && !appData.ageRating.toLowerCase().includes("unknown") && appData.ageRating.trim() !== "") ? appData.ageRating : "Unrated";
+
+    const ageRatingStr = appData.ageRating?.toLowerCase() || "";
+    const isGenericAge = ageRatingStr.includes("not") || ageRatingStr.includes("unknown") || ageRatingStr.trim() === "";
+    const ageRating = isGenericAge ? "Unrated" : appData.ageRating;
     const description = appData.description || "No description available.";
 
     if ((title === appId || !appData.title) && (developer === "Unknown Developer" || !appData.developer)) {
