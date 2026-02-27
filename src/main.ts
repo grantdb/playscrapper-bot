@@ -95,32 +95,32 @@ DO NOT provide information for a different app even if the name is similar (e.g.
 If you find multiple similar results, prioritize the one that matches the package ID exactly in the URL or snippet.
 
 IMPORTANT: Try to find the official Google Play Store page first. 
-Some apps are in "Early Access" or "Beta" but are still publicly visible with download counts (e.g., 100+ downloads). You MUST extract details for these apps if you can find them.
+Some apps are in "Early Access" or "Beta" but are still publicly visible with download counts (e.g., 10+, 50+, 100+ downloads). You MUST extract details for these apps.
 
-If the official Play Store page is not found (often due to geo-restrictions or region locking), you MUST look for the app's metadata on trustworthy alternative databases like AppBrain, APKPure, or Softpedia.
+If you find an app that significantly matches the name or context of the request, return "found": true even if the package ID is not explicitly visible in the search snippet.
 
 From your search results, you MUST extract:
-- The EXACT app title as it appears on the page.
-- The EXACT developer name. Look for "Offered by", "Developer:", or the text directly below the app title. (For Matedoro, it is "adrisanchiner", not a Reddit username).
+- The EXACT app title.
+- The Official Developer name (e.g., "adrisanchiner").
 - The star rating (if available, else "Unrated").
-- The exact download count if visible (e.g., "50+", "100+", "1K+"). DO NOT return "New Release" if a number is mentioned in any snippet.
+- The exact download count if visible (e.g., "10+", "50+", "100+"). 
 - The last updated date.
-- The maturity/content rating (e.g., "Everyone", "Teen", "PEGI 3", "ESRB"). Look for "Content rating" or "Maturity".
+- The maturity rating (e.g., "Everyone", "Teen", "PEGI 3", "Rated for 3+").
 - A brief 1-2 sentence description.
 
 Return ONLY a raw JSON object with no markdown or backticks:
 {
   "found": true or false,
-  "title": "exact title",
-  "developer": "exact developer name",
-  "rating": "4.5 or Unrated",
-  "downloads": "e.g. 50+",
-  "updated": "e.g. Feb 27, 2026",
-  "ageRating": "e.g. Everyone",
+  "title": "...",
+  "developer": "...",
+  "rating": "...",
+  "downloads": "...",
+  "updated": "...",
+  "ageRating": "...",
   "description": "..."
 }
 
-If you cannot verify the EXACT package ID "${appId}" exists, return {"found": false}.`;
+If you find NO evidence of any app resembling this name or ID, return {"found": false}.`;
 
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
         method: 'POST',
@@ -193,9 +193,8 @@ If you cannot verify the EXACT package ID "${appId}" exists, return {"found": fa
         }
 
         if (htmlResponse && !htmlResponse.ok) {
-          // If Gemini also failed completely, we fallback to a more generic description if we can find it
-          // In the case of com.aryan.reader, if Gemini said false, we post Beta notice.
-          if (geminiFoundNothing) {
+          // Only post Beta notice if Gemini found ABSOLUTELY nothing (no title)
+          if (geminiFoundNothing && (!appData.title || appData.title === appId)) {
             console.log(`Fallback failed (HTTP ${htmlResponse.status}). Treating as potential Beta/Testing app.`);
             const testingUrl = `https://play.google.com/apps/testing/${appId}`;
             const betaCommentBody = `### **Early Access / Indexed App**\n\n` +
