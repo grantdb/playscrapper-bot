@@ -90,13 +90,16 @@ async function processAppUrl(context: any, postId: string, force: boolean = fals
 Your task is to find the official information for the app with package ID: "${appId}".
 
 USE YOUR SEARCH TOOL to find the current metadata for this app.
-Search query suggestion: 'site:play.google.com "${appId}" "downloads" "rated"'
+Search query suggestions:
+1. 'site:play.google.com "${appId}"'
+2. 'site:play.google.com "${appId}" downloads rating'
 
 CRITICAL extracted data:
 - The EXACT app title.
 - Official Developer name (look for "Offered by").
-- The exact download count (e.g., "10+", "50+", "100+"). DO NOT return "Not specified" or "Unknown" if a number is visible in ANY snippet.
-- The content maturity rating (e.g., "Everyone", "Teen", "Everyone 10+", "PEGI 3", "Rated for 3+"). Look for the letter 'E' icon or text like "Rated for".
+- The exact download count (e.g., "10+", "50+", "100+"). SEARCH CAREFULLY.
+- The content maturity rating (e.g., "Everyone", "Teen", "Rated for 3+").
+- The last updated date (e.g., "Feb 24, 2026").
 - Brief 1-2 sentence description.
 
 Return ONLY a raw JSON object:
@@ -240,9 +243,9 @@ If you find NO evidence of any app with this package ID, return {"found": false}
     const title = appData.title || appId;
     const developer = (appData.developer && !appData.developer.includes("Not specified") && !appData.developer.includes("Unknown")) ? appData.developer : "Unknown Developer";
     const rating = appData.rating || "Unrated";
-    const downloads = (appData.downloads && !appData.downloads.toLowerCase().includes("not") && !appData.downloads.toLowerCase().includes("unknown")) ? appData.downloads : (appData.found !== false ? "New Release" : "Unknown");
-    const updatedOn = appData.updated || "Unknown";
-    const ageRating = (appData.ageRating && !appData.ageRating.toLowerCase().includes("not") && !appData.ageRating.toLowerCase().includes("unknown")) ? appData.ageRating : "Unrated";
+    const downloads = (appData.downloads && !appData.downloads.toLowerCase().includes("not") && !appData.downloads.toLowerCase().includes("unknown") && appData.downloads.trim() !== "") ? appData.downloads : (appData.found !== false ? "New Release" : "Unknown");
+    const updatedOn = (appData.updated && !appData.updated.toLowerCase().includes("not") && !appData.updated.toLowerCase().includes("unknown") && appData.updated.trim() !== "") ? appData.updated : "Unknown";
+    const ageRating = (appData.ageRating && !appData.ageRating.toLowerCase().includes("not") && !appData.ageRating.toLowerCase().includes("unknown") && appData.ageRating.trim() !== "") ? appData.ageRating : "Unrated";
     const description = appData.description || "No description available.";
 
     if ((title === appId || !appData.title) && (developer === "Unknown Developer" || !appData.developer)) {
