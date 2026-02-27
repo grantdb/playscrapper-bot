@@ -246,10 +246,13 @@ If you cannot visit or find the page at all, return {"found": false}.`;
           ageRating = ageMatch[1];
         }
 
-        const updatedMatch = htmlText.match(/"([A-Z][a-z]{2} \d{1,2}, \d{4})"/);
+        // Find the most recent date in the HTML — the update date is typically the latest one
+        const allDates = [...htmlText.matchAll(/"([A-Z][a-z]{2} \d{1,2}, \d{4})"/g)]
+          .map(m => m[1]);
         let updatedDate = "Unknown";
-        if (updatedMatch) {
-          updatedDate = updatedMatch[1];
+        if (allDates.length > 0) {
+          // Sort descending to get most recent date
+          updatedDate = allDates.sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0];
         }
 
         const wVqUob: string[] = [];
