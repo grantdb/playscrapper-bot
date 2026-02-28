@@ -272,15 +272,28 @@ If you find NO evidence of any app with this package ID, return {"found": false}
     const developer = (appData.developer && !appData.developer.includes("Not specified") && !appData.developer.includes("Unknown")) ? appData.developer : "Unknown Developer";
     const rating = appData.rating || "Unrated";
 
-    // Use regex to ensure we only get strings containing numbers (e.g., 10+, 1K+, 100M+)
     const downloadsMatch = appData.downloads?.match(/\d+[KMB\+]*/i);
-    const downloads = downloadsMatch ? downloadsMatch[0] : (appData.found !== false ? "New Release" : "Unknown");
+    // If we matched a standard format, use it.
+    // If not, and Gemini returned an empty string, treat it as "Unknown" so it drops from the comment cleanly.
+    // Only use "New Release" if the app was completely NOT FOUND (found === false).
+    let downloads = "Unknown";
+    if (downloadsMatch) {
+      downloads = downloadsMatch[0];
+    } else if (appData.found === false) {
+      downloads = "New Release";
+    }
 
     const updatedOn = (appData.updated && !appData.updated.toLowerCase().includes("not") && !appData.updated.toLowerCase().includes("unknown") && appData.updated.trim() !== "") ? appData.updated : "Unknown";
 
     const ageRatingStr = appData.ageRating?.toLowerCase() || "";
     const isGenericAge = ageRatingStr.includes("not") || ageRatingStr.includes("unknown") || ageRatingStr.trim() === "";
     const ageRating = isGenericAge ? "Unrated" : appData.ageRating;
+
+    // Rating cleanup: if it says "not found" etc, make it Unrated
+    let finalRating = rating;
+    if (rating.toLowerCase().includes("not found") || rating.toLowerCase().includes("unknown")) {
+      finalRating = "Unrated";
+    }
     const description = appData.description || "No description available.";
 
     if ((title === appId || !appData.title) && (developer === "Unknown Developer" || !appData.developer)) {
@@ -290,7 +303,7 @@ If you find NO evidence of any app with this package ID, return {"found": false}
 
     const commentLines = [`### **${title}**\n`];
     if (developer !== "Unknown Developer") commentLines.push(`* **Developer:** ${developer}`);
-    if (rating !== "Unrated") commentLines.push(`* **Rating:** ${rating}`);
+    if (finalRating !== "Unrated") commentLines.push(`* **Rating:** ${finalRating}`);
     if (downloads !== "Unknown") commentLines.push(`* **Downloads:** ${downloads}`);
     if (updatedOn !== "Unknown") commentLines.push(`* **Updated:** ${updatedOn}`);
     if (ageRating !== "Unknown") commentLines.push(`* **Content Rating:** ${ageRating}`);
