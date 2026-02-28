@@ -104,6 +104,7 @@ CRITICAL INSTRUCTIONS:
 Return a raw JSON object:
 {
   "found": true or false,
+  "detectedPackageId": "the EXACT package ID you found in the search result URL or snippet",
   "title": "...",
   "developer": "...",
   "rating": "...",
@@ -167,7 +168,13 @@ If you find NO evidence of any app with this package ID, return {"found": false}
       } catch (parseError) {
         console.log(`Failed to parse Gemini response as JSON: ${aiResponseText}`);
       }
-      console.log(`Gemini result - found: ${appData.found}, title: ${appData.title}, developer: ${appData.developer}`);
+      console.log(`Gemini result - found: ${appData.found}, title: ${appData.title}, developer: ${appData.developer}, detectedId: ${appData.detectedPackageId}`);
+
+      // Hard rejection if the detected ID doesn't match the target ID (prevents hallucination/mixing)
+      if (appData.found && appData.detectedPackageId && appData.detectedPackageId !== appId) {
+        console.log(`REJECTED: Gemini found wrong package ID (${appData.detectedPackageId}) for target ${appId}`);
+        appData.found = false;
+      }
 
       const geminiFoundNothing = appData.found === false;
       const geminiMissingStats = !appData.downloads || appData.downloads === "Unknown";
