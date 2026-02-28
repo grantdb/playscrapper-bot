@@ -89,16 +89,17 @@ async function processAppUrl(context: any, postId: string, force: boolean = fals
       const prompt = `You are a helpful assistant that retrieves details about Android apps from the Google Play Store.
 Your task is to find the official information for the app with package ID: "${appId}".
 
-SEARCH STRATEGY:
+SEARCH STRATEGY & STRICTNESS:
 1. Search for 'site:play.google.com "${appId}"'.
-2. If metrics (downloads/content rating) are missing, search for 'site:play.google.com "${appId}" "downloads" "Everyone"'.
-3. Search for the Play Store URL directly: 'https://play.google.com/store/apps/details?id=${appId}'.
+2. Search for the direct Play Store URL: 'https://play.google.com/store/apps/details?id=${appId}'.
+3. CRITICAL: Only return "found": true if you find a search result whose URL OR SNIPPET explicitly contains the package ID "${appId}".
+4. DO NOT mix information from different apps. Even if another app (like "Floosy") appears in the results, ONLY extract data for "${appId}". If "${appId}" is not found, return {"found": false}.
 
 CRITICAL INSTRUCTIONS:
-- You MUST find the official Play Store title and developer for "${appId}".
-- Look specifically for strings like "10+ downloads", "50+ downloads", or "100+ downloads" in search result snippets. Return ONLY the number and plus (e.g., "10+").
-- Look for the Content Rating text or icon description like "Everyone", "Rated for 3+", or "Teen".
-- If you find ANY evidence of the app matching this ID, return "found": true.
+- You MUST find the official Play Store title and developer for the EXACT package ID "${appId}".
+- Look specifically for strings like "10+ downloads", "50+ downloads", or "100+ downloads" in search result snippets for THAT EXACT app. 
+- Look for the Content Rating text like "Everyone", "Rated for 3+", or "Teen" for THAT EXACT app.
+- If the search results only show OTHER apps (even if they have similar names) and not the exact ID "${appId}", you MUST return {"found": false}.
 
 Return a raw JSON object:
 {
