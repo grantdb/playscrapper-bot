@@ -93,9 +93,10 @@ SEARCH STRATEGY & STRICTNESS:
 1. Search for 'site:play.google.com "${appId}"'.
 2. Search for the direct Play Store URL: 'https://play.google.com/store/apps/details?id=${appId}'.
 3. CRITICAL: Only return "found": true if you find a search result whose URL OR SNIPPET explicitly contains the package ID "${appId}".
-4. DO NOT mix information from different apps. Even if another app (like "Floosy") appears in the results, ONLY extract data for "${appId}". If "${appId}" is not found, return {"found": false}.
+4. DO NOT mix information from different apps. Even if another app (like "Floosy") appears in the results, ONLY extract data for the EXACT target "${appId}". If "${appId}" is not found, return {"found": false}.
 
 CRITICAL INSTRUCTIONS:
+- TRANSLATION MANDATORY: All returned data (title, developer, description) MUST be in English. If the Play Store page is in another language, translate it faithfully.
 - You MUST find the official Play Store title and developer for the EXACT package ID "${appId}".
 - Look specifically for strings like "10+ downloads", "50+ downloads", or "100+ downloads" in search result snippets for THAT EXACT app. 
 - Look for the Content Rating text like "Everyone", "Rated for 3+", or "Teen" for THAT EXACT app.
@@ -104,7 +105,7 @@ CRITICAL INSTRUCTIONS:
 Return a raw JSON object:
 {
   "found": true or false,
-  "detectedPackageId": "the EXACT package ID you found in the search result URL or snippet",
+  "detectedPackageId": "${appId} detected from your tool result",
   "title": "...",
   "developer": "...",
   "rating": "...",
