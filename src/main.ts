@@ -101,7 +101,8 @@ SEARCH STRATEGY:
 CRITICAL INSTRUCTIONS:
 - You are provided with the official app URL: ${playStoreLink}. Your task is to extract its details accurately.
 - TRANSLATION MANDATORY: All returned data MUST be in English.
-- METRIC HARVESTING: Search result snippets often contain fragments like "Contains ads", "In-app purchases", "Everyone", or "10+ downloads". You MUST extract these.
+- METRIC HARVESTING: Search result snippets often contain fragments like "Contains ads", "In-app purchases", "Everyone", or "10M+ downloads". You MUST extract these.
+- ANTI-HALLUCINATION FOR METRICS: ONLY extract metrics (downloads, rating, age rating) if they match standard Google Play Store visual formats (e.g., '1B+ downloads', '4.5 stars', 'Rated for 3+'). DO NOT guess or extract arbitrary numbers from the app description (e.g., 'has 2 billion users' does NOT mean downloads: 2). If a standard metric isn't visible in the snippet, leave the field empty ("").
 - ANTI-RECITATION: Do NOT copy the app description verbatim. You MUST summarize or rephrase the description in your own words. If you copy it exactly, you will trigger a safety block.
 - If you find the official page for "${appId}", return "found": true. If you are certain it does not exist, return {"found": false}.
 
