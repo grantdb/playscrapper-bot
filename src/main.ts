@@ -93,25 +93,24 @@ Your task is to find the official information for the app with package ID: "${ap
 HINT: The app might be related to "${postTitle}". If the package ID search fails, use this title to find the listing.
 
 SEARCH STRATEGY & STRICTNESS:
-1. Search for 'site:play.google.com "${appId}"'.
-2. Search for the direct Play Store URL: 'https://play.google.com/store/apps/details?id=${appId}'.
-3. CRITICAL: Only return "found": true if you find a search result whose URL OR SNIPPET explicitly contains the package ID "${appId}".
-4. DO NOT mix information from different apps. Even if another app (like "Floosy") appears in the results, ONLY extract data for the EXACT target "${appId}". If "${appId}" is not found, return {"found": false}.
+1. Search for 'site:play.google.com "${appId}" "${postTitle}"'.
+2. Search for 'site:play.google.com "${appId}"'.
+3. Search for the direct Play Store URL: 'https://play.google.com/store/apps/details?id=${appId}'.
+4. CRITICAL: Only return "found": true if you find a search result whose URL OR SNIPPET explicitly contains either the package ID "${appId}" OR a very strong mention of "${postTitle}" associated with a Play Store link.
+5. DO NOT mix information from different apps. Even if another app (like "Floosy") appears in the results, ONLY extract data for the EXACT target "${appId}" or its alias "${postTitle}". If neither is found, return {"found": false}.
 
 CRITICAL INSTRUCTIONS:
-- TRANSLATION MANDATORY: All returned data (title, developer, description) MUST be in English. If the Play Store page is in another language, translate it faithfully.
-- You MUST find the official Play Store title and developer for the EXACT package ID "${appId}".
-- Look specifically for strings like "10+ downloads", "50+ downloads", or "100+ downloads" in search result snippets for THAT EXACT app. 
-- Look for the Content Rating text like "Everyone", "Rated for 3+", or "Teen" for THAT EXACT app.
-- If the search results only show OTHER apps (even if they have similar names) and not the exact ID "${appId}", you MUST return {"found": false}.
+- TRANSLATION MANDATORY: All returned data MUST be in English.
+- METRIC HARVESTING: Search result snippets often contain fragments like "Contains ads", "In-app purchases", "Everyone", or "10+ downloads". You MUST extract these even if the full page doesn't load.
+- If the search results only show OTHER apps and not the exact ID "${appId}" or the title "${postTitle}", you MUST return {"found": false}.
 
 Return a raw JSON object:
 {
   "reasoning": "Briefly explain WHICH search result snippet confirmed this is the EXACT app '${appId}'.",
   "found": true or false,
   "sourceUrl": "The core Play Store URL from your search results (MUST contain 'id=${appId}')",
-  "detectedPackageId": "The ${appId} you are verifying",
-  "title": "...",
+  "detectedPackageId": "${appId}",
+  "title": "Use '${postTitle}' if the official title isn't found but the app is confirmed",
   "developer": "...",
   "rating": "...",
   "downloads": "...",
@@ -212,7 +211,8 @@ If you find NO evidence of any app with this package ID, return {"found": false}
           // Only post Beta notice if Gemini found ABSOLUTELY nothing (no title)
           if (geminiFoundNothing && (!appData.title || appData.title === appId)) {
             console.log(`Fallback failed (HTTP ${htmlResponse.status}). Treating as potential Beta/Testing app.`);
-            const betaCommentBody = `### **New / Early Access App**\n\n` +
+            const appDisplayName = postTitle || appId;
+            const betaCommentBody = `### **New App: ${appDisplayName}**\n\n` +
               `It looks like this app is currently a **New Release**, in **Early Access**, or its details are not yet fully indexed in our primary data sources.\n\n` +
               `**Want to try this app?**\n` +
               `You can find it on the Google Play Store using the link below:\n\n` +
