@@ -86,8 +86,11 @@ async function processAppUrl(context: any, postId: string, force: boolean = fals
       }
 
       const playStoreLink = `https://play.google.com/store/apps/details?id=${appId}`;
+      const postTitle = post.title || "";
       const prompt = `You are a helpful assistant that retrieves details about Android apps from the Google Play Store.
 Your task is to find the official information for the app with package ID: "${appId}".
+
+HINT: The app might be related to "${postTitle}". If the package ID search fails, use this title to find the listing.
 
 SEARCH STRATEGY & STRICTNESS:
 1. Search for 'site:play.google.com "${appId}"'.
@@ -210,8 +213,8 @@ If you find NO evidence of any app with this package ID, return {"found": false}
           if (geminiFoundNothing && (!appData.title || appData.title === appId)) {
             console.log(`Fallback failed (HTTP ${htmlResponse.status}). Treating as potential Beta/Testing app.`);
             const testingUrl = `https://play.google.com/apps/testing/${appId}`;
-            const betaCommentBody = `### **Early Access / Indexed App**\n\n` +
-              `It looks like this app is currently in **Early Access**, a **Closed Beta**, or its details are not yet fully available in our primary data sources.\n\n` +
+            const betaCommentBody = `### **New / Early Access App**\n\n` +
+              `It looks like this app is currently a **New Release**, in **Early Access**, or its details are not yet fully indexed in our primary data sources.\n\n` +
               `**Want to try this app?**\n` +
               `You can find it on the Google Play Store using the link below. For some testing apps, you may need to opt-in as a tester first:\n\n` +
               `👉 **[View App on Play Store](https://play.google.com/store/apps/details?id=${appId})**\n` +
