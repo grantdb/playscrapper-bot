@@ -102,6 +102,7 @@ CRITICAL INSTRUCTIONS:
 - You are provided with the official app URL: ${playStoreLink}. Your task is to extract its details accurately.
 - TRANSLATION MANDATORY: All returned data MUST be in English.
 - METRIC HARVESTING: Search result snippets often contain fragments like "Contains ads", "In-app purchases", "Everyone", or "10+ downloads". You MUST extract these.
+- ANTI-RECITATION: Do NOT copy the app description verbatim. You MUST summarize or rephrase the description in your own words. If you copy it exactly, you will trigger a safety block.
 - If you find the official page for "${appId}", return "found": true. If you are certain it does not exist, return {"found": false}.
 
 Return a raw JSON object:
