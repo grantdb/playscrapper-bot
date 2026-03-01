@@ -101,9 +101,9 @@ SEARCH STRATEGY:
 CRITICAL INSTRUCTIONS:
 - You are provided with the official app URL: ${playStoreLink}. Your task is to extract its details accurately.
 - TRANSLATION MANDATORY: All returned data MUST be in English.
-- METRIC HARVESTING: Search result snippets often contain fragments like "Contains ads", "In-app purchases", "Everyone", or "10M+ downloads". You MUST extract these.
+- METRIC HARVESTING: Search result snippets often contain fragments like "Contains ads", "In-app purchases", "Everyone", "Teen", "Mature 17+", "Rated for 3+", or "10M+ downloads". You MUST extract these. Pay special attention to finding the maturity/age rating.
 - ANTI-HALLUCINATION FOR METRICS: ONLY extract metrics (downloads, rating, age rating) if they match standard Google Play Store visual formats (e.g., '1B+ downloads', '4.5 stars', 'Rated for 3+'). DO NOT guess or extract arbitrary numbers from the app description (e.g., 'has 2 billion users' does NOT mean downloads: 2). If a standard metric isn't visible in the snippet, leave the field empty ("").
-- ANTI-RECITATION: Do NOT copy the app description verbatim. You MUST summarize or rephrase the description in your own words. If you copy it exactly, you will trigger a safety block.
+- ANTI-RECITATION: Do NOT copy the app description verbatim. You MUST summarize or rephrase the description in your own words, keeping it concise (maximum 2 short sentences). If you copy it exactly, you will trigger a safety block.
 - If you find the official page for "${appId}", return "found": true. If you are certain it does not exist, return {"found": false}.
 
 Return a raw JSON object:
@@ -303,7 +303,7 @@ If you find NO evidence of any app with this package ID, return {"found": false}
       return { success: false, message: 'Could not extract valid app details.' };
     }
 
-    const commentLines = [`### **${title}**\n`];
+    const commentLines = [`✓ **Confirmed - Playstore Match Found**\n\n### **${title}**\n`];
     if (developer !== "Unknown Developer") commentLines.push(`* **Developer:** ${developer}`);
     if (finalRating !== "Unknown") commentLines.push(`* **Rating:** ${finalRating}`);
     if (downloads !== "Unknown") commentLines.push(`* **Downloads:** ${downloads}`);
